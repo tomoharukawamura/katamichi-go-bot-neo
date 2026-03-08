@@ -1,0 +1,13 @@
+node_modules
+dist
+generated
+.env
+.env.example
+.git
+.github
+.gitignore
+.dockerignore
+docker-compose.yml
+scripts
+infrastructure
+*.md

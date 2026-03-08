@@ -1,0 +1,24 @@
+{
+  "name": "katamichi-go-bot-neo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prebuild": "mkdir -p generated && cp json/slack-config/dev.json generated/slack-config.json",
+    "build": "esbuild src/*/index.ts --bundle --platform=node --outdir=dist --external:@aws-sdk/*",
+    "predev": "mkdir -p generated && cp json/slack-config/dev.json generated/slack-config.json",
+    "dev": "esbuild src/*/index.ts --bundle --platform=node --outdir=dist --external:@aws-sdk/* --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1004.0",
+    "@aws-sdk/lib-dynamodb": "^3.1004.0",
+    "@slack/bolt": "^4.0.0",
+    "cheerio": "^1.0.0"
+  }
+}
