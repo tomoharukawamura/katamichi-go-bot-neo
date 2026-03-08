@@ -1,4 +1,3 @@
-import slackChannels from '../generated/slack-config.json'
 import links from '../json/shops/link.json'
 import kanaMap from '../json/charactors/kana.json'
 import abolishedCars from '../json/cars/abolished-cars.json'
@@ -7,10 +6,6 @@ import carColors from '../json/decorators/car-colors.json'
 import cars from '../json/cars/toyota-cars.json'
 import shopArea from '../json/shops/shop-area.json'
 import type { CarType, CarWithType, ShopAreaEntry } from './types.js'
-
-export function getChannelId(startArea: string, returnArea: string): string | undefined {
-  return slackChannels.channels[`${startArea}_${returnArea}` as keyof typeof slackChannels.channels] ?? (slackChannels.other || undefined)
-}
 
 const typedKanaMap = kanaMap as Record<string, string>
 const typedLinks = links as Record<string, string>

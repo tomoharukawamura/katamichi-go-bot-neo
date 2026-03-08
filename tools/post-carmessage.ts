@@ -1,10 +1,15 @@
 import { app as slackApp } from './slack-bot-app.js'
-import { createAttachments, getChannelId } from './create-attachments.js'
+import { createAttachments } from './create-attachments.js'
 import type { CarWithType } from './types.js'
+import slackChannels from '../generated/slack-config.json'
 
 interface PostResult {
   carName: string
   ts?: string
+}
+
+export function getChannelId(startArea: string, returnArea: string): string | undefined {
+  return slackChannels.channels[`${startArea}_${returnArea}` as keyof typeof slackChannels.channels] ?? (slackChannels.other || undefined)
 }
 
 export async function postCarMessage(car: CarWithType): Promise<PostResult | null> {
