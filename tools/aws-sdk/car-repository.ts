@@ -1,6 +1,6 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, ScanCommand, PutCommand, UpdateCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb'
-import type { CarRecord, CarDetail, CarStatus } from './types.js'
+import type { CarRecord, CarDetail, CarStatus } from '../types.js'
 
 export class CarRepository {
   private docClient: DynamoDBDocumentClient

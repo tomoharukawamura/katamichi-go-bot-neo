@@ -1,5 +1,5 @@
-import { CarManager } from '../../tools/car-manager.js'
-import { postCarMessage } from '../../tools/post-carmessage.js'
+import { CarManager } from '../../tools/car-data/car-manager.js'
+import { postCarMessage } from '../../tools/slack/post-carmessage.js'
 import type { CarWithType } from '../../tools/types.js'
 
 const EXECUTION_TIMES = 

@@ -1,11 +1,11 @@
-import links from '../json/shops/link.json'
-import kanaMap from '../json/charactors/kana.json'
-import abolishedCars from '../json/cars/abolished-cars.json'
-import specialIcons from '../json/decorators/car-icon.json'
-import carColors from '../json/decorators/car-colors.json'
-import cars from '../json/cars/toyota-cars.json'
-import shopArea from '../json/shops/shop-area.json'
-import type { CarType, CarWithType, ShopAreaEntry } from './types.js'
+import links from '../../json/shops/link.json'
+import kanaMap from '../../json/charactors/kana.json'
+import abolishedCars from '../../json/cars/abolished-cars.json'
+import specialIcons from '../../json/decorators/car-icon.json'
+import carColors from '../../json/decorators/car-colors.json'
+import cars from '../../json/cars/toyota-cars.json'
+import shopArea from '../../json/shops/shop-area.json'
+import type { CarType, CarWithType, ShopAreaEntry } from '../types.js'
 
 const typedKanaMap = kanaMap as Record<string, string>
 const typedLinks = links as Record<string, string>

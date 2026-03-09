@@ -1,7 +1,7 @@
 import { app as slackApp } from './slack-bot-app.js'
 import { createAttachments } from './create-attachments.js'
-import type { CarWithType } from './types.js'
-import slackChannels from '../generated/slack-config.json'
+import type { CarWithType } from '../types.js'
+import slackChannels from '../../generated/slack-config.json'
 
 interface PostResult {
   carName: string

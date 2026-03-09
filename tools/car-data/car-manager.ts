@@ -1,6 +1,6 @@
 import * as cheerio from 'cheerio'
-import { CarRepository } from './car-repository.js'
-import type { CarDetail, CarStatus, CarWithType } from './types.js'
+import { CarRepository } from '../aws-sdk/car-repository.js'
+import type { CarDetail, CarStatus, CarWithType } from '../types.js'
 
 export interface ScrapedCar {
   carName: string
