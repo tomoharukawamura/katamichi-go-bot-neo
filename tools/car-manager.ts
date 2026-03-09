@@ -117,6 +117,7 @@ export class CarManager {
   }
 
   public async getCars() {
+    this.changes = []
     const cars = await this.fetchCars()
     if (cars) await this.registerCars(cars)
   }
