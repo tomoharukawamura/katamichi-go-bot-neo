@@ -72,10 +72,8 @@ export class CarManager {
   private async registerCars(scrapedCars: ScrapedCar[]) {
     this.changes = []
     const existing = await this.repo.getAll()
-    const seen = new Set<string>()
 
-    for (const { carName, status, data } of scrapedCars) {
-      seen.add(carName)
+    const results = await Promise.allSettled(scrapedCars.map(async ({ carName, status, data }): Promise<CarWithType | null> => {
       // 前の状態を確認
       const record = existing.get(carName)
 
@@ -83,22 +81,30 @@ export class CarManager {
         // DB未登録 → 新規追加
         await this.repo.put(carName, status, data)
         if (status === 'available') {
-          this.changes.push({ carName, ...data, type: 'new' })
+          return { carName, ...data, type: 'new' }
         }
       } else if (record.status === 'available' && status === 'unavailable') {
         // 受付中 → 受付終了（売切れ）
         await this.repo.updateStatus(carName, 'unavailable')
-        this.changes.push({ carName, ...data, type: 'soldOut', ts: record.ts })
+        return { carName, ...data, type: 'soldOut', ts: record.ts }
       } else if (record.status === 'unavailable' && status === 'available') {
         // 受付終了 → 受付中（復活）
         await this.repo.updateStatus(carName, 'available')
-        this.changes.push({ carName, ...data, type: 'recovered', ts: record.ts })
+        return { carName, ...data, type: 'recovered', ts: record.ts }
       } else if (status === 'available' && !this.isEqual(record.data, data)) {
         // 受付中のままデータ変化（更新）
         await this.repo.updateData(carName, data)
-        this.changes.push({ carName, ...data, type: 'updated', ts: record.ts })
+        return { carName, ...data, type: 'updated', ts: record.ts }
       }
-    }
+      return null
+    }))
+
+    this.changes.push(
+      ...results.filter(
+          (r): r is PromiseFulfilledResult<CarWithType> => r.status === 'fulfilled' && !!r.value
+        )
+        .map(r => r.value!)
+    )
   }
 
   public async initDB() {
