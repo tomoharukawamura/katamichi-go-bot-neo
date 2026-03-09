@@ -4,10 +4,9 @@ on:
   push:
     branches: [main]
     paths:
-      - src/init-db/**
-      - tools/car-manager.ts
-      - tools/car-repository.ts
-      - tools/types.ts
+      - src/get-cars/**
+      - tools/**
+      - json/**
       - Dockerfile
       - package.json
       - package-lock.json
