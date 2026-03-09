@@ -8,9 +8,14 @@
     "build": "esbuild src/*/index.ts --bundle --platform=node --outdir=dist --external:@aws-sdk/*",
     "predev": "mkdir -p generated && cp json/slack-config/dev.json generated/slack-config.json",
     "dev": "esbuild src/*/index.ts --bundle --platform=node --outdir=dist --external:@aws-sdk/* --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "biome lint .",
+    "check": "biome check --write ."
   },
   "devDependencies": {
+    "@biomejs/biome": "2.4.6",
     "@types/node": "^22.0.0",
     "esbuild": "^0.25.0",
     "typescript": "^5.7.0"
