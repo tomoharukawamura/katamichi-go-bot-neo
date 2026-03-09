@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import { CarRepository } from "../aws-sdk/car-repository.js";
+import { HtmlCacheRepository } from "../aws-sdk/html-cache-repository.js";
 import type { CarDetail, CarStatus, CarWithType } from "../types.js";
 
 export interface ScrapedCar {
@@ -8,26 +9,37 @@ export interface ScrapedCar {
   data: CarDetail;
 }
 
+export interface CarScrapingConfig {
+  skipCache?: boolean;
+}
+
 export class CarManager {
   private url: string;
-  private html: string | null;
   private repo: CarRepository;
+  private htmlCache: HtmlCacheRepository;
   public changes: CarWithType[];
 
   constructor() {
     this.url = "https://cp.toyota.jp/rentacar";
-    this.html = null;
     this.repo = new CarRepository();
+    this.htmlCache = new HtmlCacheRepository();
     this.changes = [];
   }
 
-  private async fetchCars(): Promise<ScrapedCar[] | null> {
+  private async fetchCars(
+    config: CarScrapingConfig = {
+      skipCache: false,
+    },
+  ): Promise<ScrapedCar[] | null> {
     const response = await fetch(this.url);
     const html = await response.text();
 
     // 変化なし
-    if (!process.env.NO_CACHE && this.html === html) return null;
-    this.html = html;
+    if (!config.skipCache && !process.env.NO_CACHE) {
+      const cachedHtml = await this.htmlCache.get(this.url);
+      if (cachedHtml === html) return null;
+    }
+    await this.htmlCache.put(this.url, html);
 
     const $ = cheerio.load(html);
     const allCarElems = $("ul#service-items-shop-type-start").find(
@@ -149,8 +161,8 @@ export class CarManager {
   }
 
   public async initDB() {
-    this.html = null;
-    const cars = await this.fetchCars();
+    // HTMLは強制的に上書きして取得
+    const cars = await this.fetchCars({ skipCache: true });
     if (!cars) return;
 
     const existing = await this.repo.getAll();
