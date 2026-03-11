@@ -1,7 +1,9 @@
 import * as cheerio from "cheerio";
 import { CarRepository } from "../aws-sdk/car-repository.js";
 import { HtmlCacheRepository } from "../aws-sdk/html-cache-repository.js";
-import type { CarDetail, CarStatus, CarWithType } from "../types.js";
+import type { CarDetail, CarRecord, CarStatus, CarWithType } from "../types.js";
+import { CustomError, ScrapingError } from "tools/error.js";
+import { handleError } from "tools/error-handler.js";
 
 export interface ScrapedCar {
   carName: string;
@@ -31,15 +33,36 @@ export class CarManager {
       skipCache: false,
     },
   ): Promise<ScrapedCar[] | null> {
-    const response = await fetch(this.url);
-    const html = await response.text();
+    let html: string;
 
-    // 変化なし
-    if (!config.skipCache && !process.env.NO_CACHE) {
-      const cachedHtml = await this.htmlCache.get(this.url);
-      if (cachedHtml === html) return null;
+    try {
+      const response = await fetch(this.url);
+      html = await response.text();
+    } catch (e) {
+      const error = new ScrapingError(
+        "Failed to fetch car data",
+        "FetchError",
+        e instanceof Error ? e : String(e),
+      );
+      await handleError(error);
+      return null;
     }
-    await this.htmlCache.put(this.url, html);
+
+    try {
+      // 変化なし
+      if (!config.skipCache && !process.env.NO_CACHE) {
+        const cachedHtml = await this.htmlCache.get(this.url);
+        if (cachedHtml === html) return null;
+      }
+      await this.htmlCache.put(this.url, html);
+    } catch (e) {
+      if (e instanceof CustomError) {
+        await handleError(e);
+      } else {
+        console.error(`HTMLキャッシュの処理中にエラーが発生しました:`, e);
+        throw e;
+      }
+    }
 
     const $ = cheerio.load(html);
     const allCarElems = $("ul#service-items-shop-type-start").find(
@@ -109,43 +132,60 @@ export class CarManager {
 
   private async registerCars(scrapedCars: ScrapedCar[]) {
     this.changes = [];
-    const existing = await this.repo.getAll();
+    let existing = new Map<string, CarRecord>();
+
+    try {
+      existing = await this.repo.getAll();
+    } catch (e) {
+      if (e instanceof CustomError) {
+        await handleError(e);
+      }
+      return
+    }
 
     const results = await Promise.allSettled(
       scrapedCars.map(
         async ({ carName, status, data }): Promise<CarWithType | null> => {
           // 前の状態を確認
           const record = existing.get(carName);
-
-          if (!record) {
-            // DB未登録 → 新規追加
-            await this.repo.put(carName, status, data);
-            if (status === "available") {
-              return { carName, ...data, type: "new" };
+          try {
+            if (!record) {
+              // DB未登録 → 新規追加
+              await this.repo.put(carName, status, data);
+              if (status === "available") {
+                return { carName, ...data, type: "new" };
+              }
+            } else if (
+              record.status === "available" &&
+              status === "unavailable"
+            ) {
+              // 受付中 → 受付終了（売切れ）
+              await this.repo.updateStatus(carName, "unavailable");
+              return { carName, ...data, type: "soldOut", ts: record.ts };
+            } else if (
+              record.status === "unavailable" &&
+              status === "available"
+            ) {
+              // 受付終了 → 受付中（復活）
+              await this.repo.updateStatus(carName, "available");
+              return { carName, ...data, type: "recovered", ts: record.ts };
+            } else if (
+              status === "available" &&
+              !this.isEqual(record.data, data)
+            ) {
+              // 受付中のままデータ変化（更新）
+              await this.repo.updateData(carName, data);
+              return { carName, ...data, type: "updated", ts: record.ts };
             }
-          } else if (
-            record.status === "available" &&
-            status === "unavailable"
-          ) {
-            // 受付中 → 受付終了（売切れ）
-            await this.repo.updateStatus(carName, "unavailable");
-            return { carName, ...data, type: "soldOut", ts: record.ts };
-          } else if (
-            record.status === "unavailable" &&
-            status === "available"
-          ) {
-            // 受付終了 → 受付中（復活）
-            await this.repo.updateStatus(carName, "available");
-            return { carName, ...data, type: "recovered", ts: record.ts };
-          } else if (
-            status === "available" &&
-            !this.isEqual(record.data, data)
-          ) {
-            // 受付中のままデータ変化（更新）
-            await this.repo.updateData(carName, data);
-            return { carName, ...data, type: "updated", ts: record.ts };
+
+            return null;
+          } catch (e) {
+            // このエラーはCustomErrorのはずなので、handleErrorに渡す
+            if (e instanceof CustomError) {
+              await handleError(e);
+            }
+            return null;
           }
-          return null;
         },
       ),
     );
@@ -153,11 +193,16 @@ export class CarManager {
     this.changes.push(
       ...results
         .filter(
-          (r): r is PromiseFulfilledResult<CarWithType> =>
-            r.status === "fulfilled" && !!r.value,
+          (res): res is PromiseFulfilledResult<CarWithType> =>
+            res.status === "fulfilled" && res.value !== null,
         )
-        .map((r) => r.value!),
+        .map((res) => res.value),
     );
+
+    const hasError = results.some((res) => res.status === "rejected");
+    if (hasError) {
+      console.error("registerCars: 一部の車両処理でエラーが発生しました");
+    }
   }
 
   public async initDB() {

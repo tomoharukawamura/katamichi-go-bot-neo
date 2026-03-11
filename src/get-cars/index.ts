@@ -1,21 +1,23 @@
 import { CarManager } from "../../tools/car-data/car-manager.js";
+import { CustomError } from "../../tools/error.js";
+import { handleError } from "../../tools/error-handler.js";
 import { postCarMessage } from "../../tools/slack/post-carmessage.js";
-import type { CarWithType } from "../../tools/types.js";
+import type { Context } from "aws-lambda";
 
 const EXECUTION_TIMES = process.env.EXECUTION_TIMES
   ? parseInt(process.env.EXECUTION_TIMES, 10)
   : 1;
 const EXECUTION_INTERVAL_SECONDS = process.env.EXECUTION_INTERVAL_SECONDS
   ? parseInt(process.env.EXECUTION_INTERVAL_SECONDS, 10)
-  : 45;
+  : 60;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const manager = new CarManager();
 
-export const handler = async () => {
-  const allErrors: string[] = [];
-  const allChanges: CarWithType[] = [];
+// SNSへの送信失敗のみ失敗とみなす。
+export const handler = async (_event: unknown, context: Context) => {
+  console.log(`Request ID: ${context.awsRequestId}`);
 
   for (let i = 0; i < EXECUTION_TIMES; i++) {
     if (i > 0) {
@@ -26,33 +28,20 @@ export const handler = async () => {
 
     await manager.getCars();
 
-    const results = await Promise.allSettled(
+    await Promise.allSettled(
       manager.changes.map(async (car) => {
         const result = await postCarMessage(car);
 
-        // 新着投稿時、SlackメッセージのタイムスタンプをDBに保存
         if (result?.ts) {
-          await manager.updateTs(result.carName, result.ts);
+          try {
+            await manager.updateTs(result.carName, result.ts);
+          } catch (e) {
+            if (e instanceof CustomError) {
+              await handleError(e, car);
+            }
+          }
         }
       }),
     );
-
-    allChanges.push(...manager.changes);
-
-    const errors = results.filter(
-      (r): r is PromiseRejectedResult => r.status === "rejected",
-    );
-    if (errors.length) {
-      console.error(
-        `[Run ${i + 1}/${EXECUTION_TIMES}] Failed to process some cars:`,
-        errors.map((e) => e.reason),
-      );
-      allErrors.push(...errors.map((e) => String(e.reason)));
-    }
   }
-
-  return {
-    statusCode: allErrors.length > 0 ? 207 : 200,
-    body: JSON.stringify(allChanges),
-  };
 };

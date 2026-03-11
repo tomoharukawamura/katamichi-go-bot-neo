@@ -57,5 +57,5 @@ jobs:
               --package-type Image \
               --code ImageUri=$IMAGE_URI \
               --role ${{ secrets.LAMBDA_ROLE_ARN }} \
-              --environment "Variables={SLACK_BOT_TOKEN=${{ secrets.SLACK_BOT_TOKEN }},SLACK_SIGNING_SECRET=${{ secrets.SLACK_SIGNING_SECRET }}}"
+              --environment "Variables={SLACK_BOT_TOKEN=${{ secrets.SLACK_BOT_TOKEN }},SLACK_SIGNING_SECRET=${{ secrets.SLACK_SIGNING_SECRET }},SNS_TOPIC_ARN=${{ secrets.SNS_TOPIC_ARN }},SNS_SLACK_TOPIC_ARN=${{ secrets.SNS_SLACK_TOPIC_ARN }}}"
           fi
