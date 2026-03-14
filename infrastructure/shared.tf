@@ -80,6 +80,20 @@ resource "aws_iam_role_policy" "github_actions" {
   })
 }
 
+# --- SNS ---
+resource "aws_sns_topic" "error" {
+  name = "${var.project}-error"
+}
+
+resource "aws_sns_topic" "slack_error" {
+  name = "${var.project}-slack-error"
+}
+
+# --- Secrets Manager ---
+resource "aws_secretsmanager_secret" "slack" {
+  name = "${var.project}/slack"
+}
+
 resource "aws_scheduler_schedule_group" "main" {
   name = var.project
 }

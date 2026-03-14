@@ -41,7 +41,7 @@ resource "aws_iam_role_policy" "lambda_dynamodb" {
     Statement = [{
       Effect   = "Allow"
       Action   = "dynamodb:*"
-      Resource = "arn:aws:dynamodb:${var.aws_region}:*:table/${var.project}*"
+      Resource = aws_dynamodb_table.cars.arn
     }]
   })
 }

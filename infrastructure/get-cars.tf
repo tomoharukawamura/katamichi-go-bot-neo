@@ -55,7 +55,40 @@ resource "aws_iam_role_policy" "ecs_task_dynamodb" {
     Statement = [{
       Effect   = "Allow"
       Action   = "dynamodb:*"
-      Resource = "arn:aws:dynamodb:${var.aws_region}:*:table/${var.project}*"
+      Resource = aws_dynamodb_table.cars.arn
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "ecs_task_sns" {
+  name = "sns-publish"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = "sns:Publish"
+      Resource = [
+        aws_sns_topic.error.arn,
+        aws_sns_topic.slack_error.arn,
+      ]
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
+  name = "secrets-access"
+  role = aws_iam_role.ecs_task_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "secretsmanager:GetSecretValue",
+      ]
+      Resource = aws_secretsmanager_secret.slack.arn
     }]
   })
 }
@@ -84,6 +117,13 @@ resource "aws_ecs_task_definition" "get_cars" {
     environment = [
       { name = "INTERVAL_SECONDS", value = var.interval_seconds },
       { name = "TZ", value = "Asia/Tokyo" },
+      { name = "SNS_TOPIC_ARN", value = aws_sns_topic.error.arn },
+      { name = "SNS_SLACK_TOPIC_ARN", value = aws_sns_topic.slack_error.arn },
+    ]
+
+    secrets = [
+      { name = "SLACK_BOT_TOKEN", valueFrom = "${aws_secretsmanager_secret.slack.arn}:SLACK_BOT_TOKEN::" },
+      { name = "SLACK_SIGNING_SECRET", valueFrom = "${aws_secretsmanager_secret.slack.arn}:SLACK_SIGNING_SECRET::" },
     ]
 
     logConfiguration = {

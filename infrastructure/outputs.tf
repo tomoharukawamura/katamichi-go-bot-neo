@@ -17,3 +17,11 @@ output "vpc_id" {
 output "github_actions_role_arn" {
   value = aws_iam_role.github_actions.arn
 }
+
+output "sns_topic_error_arn" {
+  value = aws_sns_topic.error.arn
+}
+
+output "sns_topic_slack_error_arn" {
+  value = aws_sns_topic.slack_error.arn
+}
