@@ -13,8 +13,8 @@ on:
 
 env:
   AWS_REGION: ap-northeast-1
-  ECR_REPOSITORY: katamichi-go-bot-neo/get-cars-fargate
-  ECS_CLUSTER: katamichi-go-bot-neo
+  ECR_REPOSITORY: katamichi-go-bot/get-cars-fargate
+  ECS_CLUSTER: katamichi-go-bot
   ECS_SERVICE: get-cars-fargate
 
 permissions:

@@ -13,8 +13,8 @@ on:
 
 env:
   AWS_REGION: ap-northeast-1
-  ECR_REPOSITORY: katamichi-go-bot-neo/init-db
-  LAMBDA_FUNCTION_NAME: katamichi-go-bot-neo-init-db
+  ECR_REPOSITORY: katamichi-go-bot/init-db
+  LAMBDA_FUNCTION_NAME: katamichi-go-bot-init-db
   HANDLER: init-db
 
 permissions:
