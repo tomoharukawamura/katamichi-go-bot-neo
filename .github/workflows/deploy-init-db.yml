@@ -48,14 +48,6 @@ jobs:
         env:
           IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
         run: |
-          if aws lambda get-function --function-name ${{ env.LAMBDA_FUNCTION_NAME }} 2>/dev/null; then
-            aws lambda update-function-code \
-              --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
-              --image-uri $IMAGE_URI
-          else
-            aws lambda create-function \
-              --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
-              --package-type Image \
-              --code ImageUri=$IMAGE_URI \
-              --role ${{ secrets.LAMBDA_ROLE_ARN }}
-          fi
+          aws lambda update-function-code \
+            --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
+            --image-uri $IMAGE_URI
