@@ -1,6 +1,4 @@
 import { CarManager } from "../../tools/car-data/car-manager.js";
-import { CustomError } from "../../tools/error.js";
-import { handleError } from "../../tools/error-handler.js";
 import { postCarMessage } from "../../tools/slack/post-carmessage.js";
 
 const isDev = process.env.NODE_ENV === "dev";
@@ -9,6 +7,17 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function main() {
   const manager = new CarManager();
+  await manager.loadRecords();
+
+  const shutdown = async () => {
+    console.log("Saving records to DynamoDB...");
+    await manager.saveRecords();
+    console.log("Records saved. Exiting.");
+    process.exit(0);
+  };
+
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 
   do {
     try {
@@ -19,11 +28,7 @@ async function main() {
         manager.changes.map(async (car) => {
           const result = await postCarMessage(car);
           if (result?.ts) {
-            try {
-              await manager.updateTs(result.carName, result.ts);
-            } catch (e) {
-              if (e instanceof CustomError) await handleError(e, car);
-            }
+            manager.updateTs(result.carName, result.ts);
           }
         }),
       );
@@ -46,6 +51,8 @@ async function main() {
 
     await sleep(INTERVAL_SECONDS * 1000);
   } while (true);
+
+  await manager.saveRecords();
 }
 
 main();

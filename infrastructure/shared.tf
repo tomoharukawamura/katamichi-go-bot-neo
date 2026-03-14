@@ -96,13 +96,3 @@ resource "aws_dynamodb_table" "cars" {
   }
 }
 
-resource "aws_dynamodb_table" "html_cache" {
-  name         = "HtmlCache"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "url"
-
-  attribute {
-    name = "url"
-    type = "S"
-  }
-}

@@ -1,8 +1,7 @@
 import * as cheerio from "cheerio";
 import { CarRepository } from "../aws-sdk/car-repository.js";
-import { HtmlCacheRepository } from "../aws-sdk/html-cache-repository.js";
 import type { CarDetail, CarRecord, CarStatus, CarWithType } from "../types.js";
-import { CustomError, ScrapingError } from "tools/error.js";
+import { ScrapingError } from "tools/error.js";
 import { handleError } from "tools/error-handler.js";
 
 export interface ScrapedCar {
@@ -18,14 +17,20 @@ export interface CarScrapingConfig {
 export class CarManager {
   private url: string;
   private repo: CarRepository;
-  private htmlCache: HtmlCacheRepository;
+  private cachedHtml: string | null;
+  private records: Map<string, CarRecord>;
   public changes: CarWithType[];
 
   constructor() {
     this.url = "https://cp.toyota.jp/rentacar";
     this.repo = new CarRepository();
-    this.htmlCache = new HtmlCacheRepository();
+    this.cachedHtml = null;
+    this.records = new Map();
     this.changes = [];
+  }
+
+  public async loadRecords() {
+    this.records = await this.repo.getAll();
   }
 
   private async fetchCars(
@@ -48,21 +53,8 @@ export class CarManager {
       return null;
     }
 
-    try {
-      // 変化なし
-      if (!config.skipCache && !process.env.NO_CACHE) {
-        const cachedHtml = await this.htmlCache.get(this.url);
-        if (cachedHtml === html) return null;
-      }
-      await this.htmlCache.put(this.url, html);
-    } catch (e) {
-      if (e instanceof CustomError) {
-        await handleError(e);
-      } else {
-        console.error(`HTMLキャッシュの処理中にエラーが発生しました:`, e);
-        throw e;
-      }
-    }
+    if (!config.skipCache && this.cachedHtml === html) return null;
+    this.cachedHtml = html;
 
     const $ = cheerio.load(html);
     const allCarElems = $("ul#service-items-shop-type-start").find(
@@ -130,103 +122,60 @@ export class CarManager {
     );
   }
 
-  private async registerCars(scrapedCars: ScrapedCar[]) {
+  private registerCars(scrapedCars: ScrapedCar[]) {
     this.changes = [];
-    let existing = new Map<string, CarRecord>();
 
-    try {
-      existing = await this.repo.getAll();
-    } catch (e) {
-      if (e instanceof CustomError) {
-        await handleError(e);
+    for (const { carName, status, data } of scrapedCars) {
+      const record = this.records.get(carName);
+
+      if (!record) {
+        // 未登録 → 新規追加
+        this.records.set(carName, { carName, status, data });
+        if (status === "available") {
+          this.changes.push({ carName, ...data, type: "new" });
+        }
+      } else if (record.status === "available" && status === "unavailable") {
+        // 受付中 → 受付終了（売切れ）
+        record.status = "unavailable";
+        this.changes.push({ carName, ...data, type: "soldOut", ts: record.ts });
+      } else if (record.status === "unavailable" && status === "available") {
+        // 受付終了 → 受付中（復活）
+        record.status = "available";
+        this.changes.push({
+          carName,
+          ...data,
+          type: "recovered",
+          ts: record.ts,
+        });
+      } else if (status === "available" && !this.isEqual(record.data, data)) {
+        // 受付中のままデータ変化（更新）
+        record.data = data;
+        this.changes.push({
+          carName,
+          ...data,
+          type: "updated",
+          ts: record.ts,
+        });
       }
-      return;
-    }
-
-    const results = await Promise.allSettled(
-      scrapedCars.map(
-        async ({ carName, status, data }): Promise<CarWithType | null> => {
-          // 前の状態を確認
-          const record = existing.get(carName);
-          try {
-            if (!record) {
-              // DB未登録 → 新規追加
-              await this.repo.put(carName, status, data);
-              if (status === "available") {
-                return { carName, ...data, type: "new" };
-              }
-            } else if (
-              record.status === "available" &&
-              status === "unavailable"
-            ) {
-              // 受付中 → 受付終了（売切れ）
-              await this.repo.updateStatus(carName, "unavailable");
-              return { carName, ...data, type: "soldOut", ts: record.ts };
-            } else if (
-              record.status === "unavailable" &&
-              status === "available"
-            ) {
-              // 受付終了 → 受付中（復活）
-              await this.repo.updateStatus(carName, "available");
-              return { carName, ...data, type: "recovered", ts: record.ts };
-            } else if (
-              status === "available" &&
-              !this.isEqual(record.data, data)
-            ) {
-              // 受付中のままデータ変化（更新）
-              await this.repo.updateData(carName, data);
-              return { carName, ...data, type: "updated", ts: record.ts };
-            }
-
-            return null;
-          } catch (e) {
-            // このエラーはCustomErrorのはずなので、handleErrorに渡す
-            if (e instanceof CustomError) {
-              await handleError(e);
-            }
-            return null;
-          }
-        },
-      ),
-    );
-
-    this.changes.push(
-      ...results
-        .filter(
-          (res): res is PromiseFulfilledResult<CarWithType> =>
-            res.status === "fulfilled" && res.value !== null,
-        )
-        .map((res) => res.value),
-    );
-
-    const hasError = results.some((res) => res.status === "rejected");
-    if (hasError) {
-      console.error("registerCars: 一部の車両処理でエラーが発生しました");
     }
   }
 
-  public async initDB() {
-    // HTMLは強制的に上書きして取得
-    const cars = await this.fetchCars({ skipCache: true });
-    if (!cars) return;
-
+  private async syncToDb(records: Map<string, CarRecord>) {
     const existing = await this.repo.getAll();
-    const scrapedNames = new Set(cars.map((c) => c.carName));
+    const newNames = new Set(records.keys());
 
-    // DBにあってスクレイピング結果にないデータを削除
+    // DBにあって新しいレコードにないデータを削除
     await Promise.all(
       Array.from(existing.keys())
-        .filter((carName) => !scrapedNames.has(carName))
-        .map((carName) => this.repo.delete(carName)),
+        .filter((name) => !newNames.has(name))
+        .map((name) => this.repo.delete(name)),
     );
 
-    // スクレイピング結果を追加・更新
+    // 追加・更新
     await Promise.all(
-      cars.map(({ carName, status, data }) => {
+      Array.from(records.values()).map(({ carName, status, data }) => {
         const record = existing.get(carName);
-        if (!record) {
-          return this.repo.put(carName, status, data);
-        }
+        if (!record) return this.repo.put(carName, status, data);
         const ops: Promise<void>[] = [];
         if (record.status !== status)
           ops.push(this.repo.updateStatus(carName, status));
@@ -237,12 +186,28 @@ export class CarManager {
     );
   }
 
-  public async updateTs(carName: string, ts: string) {
-    await this.repo.updateTs(carName, ts);
+  public async initDB() {
+    const cars = await this.fetchCars({ skipCache: true });
+    if (!cars) return;
+
+    const records = new Map<string, CarRecord>();
+    for (const { carName, status, data } of cars) {
+      records.set(carName, { carName, status, data });
+    }
+    await this.syncToDb(records);
+  }
+
+  public updateTs(carName: string, ts: string) {
+    const record = this.records.get(carName);
+    if (record) record.ts = ts;
+  }
+
+  public async saveRecords() {
+    await this.syncToDb(this.records);
   }
 
   public async getCars() {
     const cars = await this.fetchCars();
-    if (cars) await this.registerCars(cars);
+    if (cars) this.registerCars(cars);
   }
 }
