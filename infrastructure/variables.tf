@@ -26,3 +26,7 @@ variable "container_image" {
 variable "interval_seconds" {
   default = "5"
 }
+
+variable "github_repo" {
+  default = "tomoharukawamura/katamichi-go-bot-neo"
+}
