@@ -1,0 +1,24 @@
+FROM node:22-slim AS builder
+
+WORKDIR /build
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY tools/ tools/
+COPY json/ json/
+COPY tsconfig.json ./
+
+ARG BUILD_ENV=prod
+COPY src/get-cars/ src/get-cars/
+RUN mkdir -p generated && cp json/slack-config/${BUILD_ENV}.json generated/slack-config.json
+RUN npx esbuild src/get-cars/fargate.ts \
+    --bundle \
+    --platform=node \
+    --outdir=out 
+
+FROM node:22-slim
+
+WORKDIR /app
+COPY --from=builder /build/out/fargate.js ./
+CMD ["node", "fargate.js"]

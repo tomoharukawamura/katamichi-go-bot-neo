@@ -140,7 +140,7 @@ export class CarManager {
       if (e instanceof CustomError) {
         await handleError(e);
       }
-      return
+      return;
     }
 
     const results = await Promise.allSettled(
@@ -242,7 +242,6 @@ export class CarManager {
   }
 
   public async getCars() {
-    this.changes = [];
     const cars = await this.fetchCars();
     if (cars) await this.registerCars(cars);
   }

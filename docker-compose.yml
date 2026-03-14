@@ -38,8 +38,8 @@ services:
   get-car-function:
     build:
       context: .
+      dockerfile: Dockerfile.fargate
       args:
-        HANDLER: get-cars
         BUILD_ENV: dev
     depends_on:
       dynamodb-setup:
@@ -51,9 +51,7 @@ services:
       - AWS_REGION=ap-northeast-1
       - AWS_DEFAULT_REGION=ap-northeast-1
       - AWS_ENDPOINT_URL=http://dynamodb-local:8000
-      - NO_CACHE=1
-    ports:
-      - "9000:8080"
+      - NODE_ENV=dev
 
   init-db-function:
     build:

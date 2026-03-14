@@ -1,0 +1,51 @@
+name: Deploy get-cars (Fargate)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - src/get-cars/**
+      - tools/**
+      - json/**
+      - Dockerfile.fargate
+      - package.json
+      - package-lock.json
+
+env:
+  AWS_REGION: ap-northeast-1
+  ECR_REPOSITORY: katamichi-go-bot-neo/get-cars-fargate
+  ECS_CLUSTER: katamichi-go-bot-neo
+  ECS_SERVICE: get-cars-fargate
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: login-ecr
+
+      - name: Build and push
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -f Dockerfile.fargate -t $REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $REGISTRY/$ECR_REPOSITORY:latest .
+          docker push $REGISTRY/$ECR_REPOSITORY --all-tags
+
+      - name: Deploy ECS service
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --force-new-deployment
