@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - .github/workflows/deploy-init-db.yml
       - src/get-cars/**
       - tools/**
       - json/**
