@@ -173,14 +173,20 @@ export class CarManager {
 
     // 追加・更新
     await Promise.all(
-      Array.from(records.values()).map(({ carName, status, data }) => {
+      Array.from(records.values()).map(({ carName, status, data, ts }) => {
         const record = existing.get(carName);
-        if (!record) return this.repo.put(carName, status, data);
+        if (!record) {
+          const ops: Promise<void>[] = [this.repo.put(carName, status, data)];
+          if (ts) ops.push(this.repo.updateTs(carName, ts));
+          return Promise.all(ops);
+        }
         const ops: Promise<void>[] = [];
         if (record.status !== status)
           ops.push(this.repo.updateStatus(carName, status));
         if (!this.isEqual(record.data, data))
           ops.push(this.repo.updateData(carName, data));
+        if (ts && record.ts !== ts)
+          ops.push(this.repo.updateTs(carName, ts));
         return Promise.all(ops);
       }),
     );
